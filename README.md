@@ -1,0 +1,6 @@
+# ssb-names
+
+
+## License
+
+MIT

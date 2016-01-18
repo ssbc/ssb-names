@@ -1,0 +1,24 @@
+{
+  "name": "ssb-names",
+  "description": "",
+  "version": "0.0.0",
+  "homepage": "https://github.com/dominictarr/ssb-names",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/dominictarr/ssb-names.git"
+  },
+  "dependencies": {
+    "pull-many": "^1.0.6",
+    "pull-stream": "^3.1.0",
+    "pull-through": "^1.0.17",
+    "ssb-client": "^3.0.0",
+    "ssb-msgs": "^5.2.0",
+    "ssb-ref": "^2.2.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "set -e; for t in test/*.js; do node $t; done"
+  },
+  "author": "Dominic Tarr <dominic.tarr@gmail.com> (http://dominictarr.com)",
+  "license": "MIT"
+}
