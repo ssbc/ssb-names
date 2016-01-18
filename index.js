@@ -3,6 +3,30 @@ var isRef = require('ssb-ref').isLink
 var many = require('pull-many')
 var links = require('ssb-msgs').indexLinks
 var Through = require('pull-through')
+var paramap = require('pull-paramap')
+
+function count (key, cb) {
+  return pull.reduce(function (acc, item) {
+    acc = acc || {}
+    var k = item[key]
+    if(k) acc[k] = 1 + (acc[k] || 0)
+    return acc
+  }, {}, function (err, acc) {
+    if(err) cb(err)
+    else cb(null, sort(acc))
+  })
+}
+
+function sort (obj) {
+  var _obj = {}
+  Object.keys(obj).sort(function (a, b) {
+    return obj[b] - obj[a]
+  }).forEach(function (k) {
+    _obj[k] = obj[k]
+  })
+  return _obj
+}
+
 exports.name = 'names'
 
 exports.manifest = {
@@ -10,13 +34,30 @@ exports.manifest = {
   signified: 'async',
 }
 
-function count (key, cb) {
-  return pull.reduce(function (acc, item) {
-    acc = acc || {}
-    var k = item[key]
-    acc[k] = 1 + (acc[k] || 0)
-    return acc
-  }, {}, cb)
+function extractLinks () {
+  return Through(function (msg) {
+    var q = this.queue
+    links(msg.value.content, function (link, rel) {
+      if(link.link[0] !== '@') return
+//      console.log(link, rel)
+      q(link)
+    })
+  })
+}
+
+function fixAbout () {
+  //about links where a bad format where the data is beside the link
+  //instead of inside it.
+  return pull.map(function (e) {
+    if(e.value.content.type === 'about') {
+      var link = e.value.content
+      link.link = link.about
+      delete link.about
+      e.value.content = {about: link}
+    }
+    return e
+  })
+
 }
 
 exports.init =
@@ -26,15 +67,25 @@ function (sbot) {
     signified: function (name, cb) {
       pull(
         many([
-          sbot.links({rel: 'mentions', values: true}),
-          sbot.links({rel: 'about', values: true})
+          sbot.links({rel: 'mentions', dest: '@'}),
+          sbot.links({rel: 'about', dest: '@', values: true}),
         ]),
-        Through(function (msg) {
-          var queue = this.queue
-          return links(msg.value.content, function (link) {
-            if(link.name && link.name.toLowerCase() === name.toLowerCase())
-              queue(link)
+        //since we are doing such a broad query,
+        //we need to get the unique keys, otherwise messages
+        //with multiple links will be counted multiple times.
+        pull.unique('key'),
+        //retrive the message body...
+        //it would be better if this was stored in the link index though.
+        paramap(function (link, cb) {
+          sbot.get(link.key, function (err, msg) {
+            link.value = msg
+            cb(err, link)
           })
+        }, 32),
+        fixAbout(),
+        extractLinks(),
+        pull.filter(function (link) {
+          return link.name && link.name.toLowerCase() === name.toLowerCase()
         }),
         count('link', cb)
       )
@@ -44,26 +95,13 @@ function (sbot) {
       pull(
         sbot.links({dest: id, values: true}),
         pull.filter(function (e) {
-          console.log(e.rel)
           return /mentions|about/.test(e.rel)
         }),
-        Through(function (msg) {
-          var queue = this.queue
-          return links(msg.value.content, function (link) {
-            if(link.link === id) queue(link)
-          })
+        fixAbout(),
+        extractLinks(),
+        pull.filter(function (link) {
+          return link.link === id && link.name
         }),
-//        pull.map(function (e) {
-//          console.log(e)
-//          if(e.value.content.mentions)
-//            return e.value.content.mentions.filter(function (e) {
-//              return e.link == feedId
-//            })[0]
-//          else
-//            return e.value.content
-//        }),
-        pull.filter(Boolean),
-//        pull.collect(cb)
         count('name', cb)
       )
 
@@ -88,6 +126,38 @@ if(!module.parent) {
   })
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
