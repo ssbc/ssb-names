@@ -4,6 +4,12 @@ var many = require('pull-many')
 var links = require('ssb-msgs').indexLinks
 var Through = require('pull-through')
 var paramap = require('pull-paramap')
+var AsyncCache = require('async-cache')
+
+function Cache (fn, timeout, max) {
+  var ac = AsyncCache({load: fn, maxAge: timeout, max: max || 100})
+  return function (key, cb) { ac.get(key, cb) }
+}
 
 function count (key, cb) {
   return pull.reduce(function (acc, item) {
@@ -39,7 +45,6 @@ function extractLinks () {
     var q = this.queue
     links(msg.value.content, function (link, rel) {
       if(link.link[0] !== '@') return
-//      console.log(link, rel)
       q(link)
     })
   })
@@ -64,7 +69,7 @@ exports.init =
 function (sbot) {
 
   return {
-    signified: function (name, cb) {
+    signified: Cache(function (name, cb) {
       pull(
         many([
           sbot.links({rel: 'mentions', dest: '@'}),
@@ -89,8 +94,8 @@ function (sbot) {
         }),
         count('link', cb)
       )
-    },
-    signifier: function (id, cb) {
+    }),
+    signifier: Cache(function (id, cb) {
 
       pull(
         sbot.links({dest: id, values: true}),
@@ -105,7 +110,7 @@ function (sbot) {
         count('name', cb)
       )
 
-    }
+    }, 10e3)
   }
 }
 
@@ -126,6 +131,8 @@ if(!module.parent) {
   })
 
 }
+
+
 
 
 
