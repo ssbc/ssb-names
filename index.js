@@ -11,6 +11,12 @@ function Cache (fn, timeout, max) {
   return function (key, cb) { ac.get(key, cb) }
 }
 
+function startsWith(str, start) {
+  for(var i = 0; i < start.length; i++)
+    if(str[i] !== start[i]) return false
+  return true
+}
+
 function count (key, cb) {
   return pull.reduce(function (acc, item) {
     acc = acc || {}
@@ -67,7 +73,6 @@ function fixAbout () {
 
 exports.init =
 function (sbot) {
-
   return {
     signified: Cache(function (name, cb) {
       pull(
@@ -90,9 +95,26 @@ function (sbot) {
         fixAbout(),
         extractLinks(),
         pull.filter(function (link) {
-          return link.name && link.name.toLowerCase() === name.toLowerCase()
+          return link.name && startsWith(link.name.toLowerCase(), name.toLowerCase())
         }),
-        count('link', cb)
+
+        pull.reduce(function (acc, item) {
+          acc = acc || {}
+          var k = item.link + ':' + item.name
+          if(!acc[k])
+            acc[k] = {id: item.link, name: item.name, rank: 0}
+          acc[k].rank ++
+          return acc
+        }, {}, function (err, acc) {
+          if(err) cb(err)
+          else cb(null,
+            Object.keys(acc).map(function (k) {
+              return acc[k]
+            }).sort(function (a, b) {
+              return b.rank - a.rank
+            })
+          )
+        })
       )
     }),
     signifier: Cache(function (id, cb) {
@@ -114,7 +136,6 @@ function (sbot) {
   }
 }
 
-
 if(!module.parent) {
   var query = process.argv[2]
   if(!query) return console.error('must provide query')
@@ -131,47 +152,4 @@ if(!module.parent) {
   })
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
