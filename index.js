@@ -1,15 +1,10 @@
 var pull = require('pull-stream')
-var isRef = require('ssb-ref').isLink
-var many = require('pull-many')
+var isFeed = require('ssb-ref').isFeed
 var links = require('ssb-msgs').indexLinks
-var Through = require('pull-through')
-var paramap = require('pull-paramap')
-var AsyncCache = require('async-cache')
+var G = require('graphreduce')
+var Reduce = require('flumeview-reduce')
 
-function Cache (fn, timeout, max) {
-  var ac = AsyncCache({load: fn, maxAge: timeout, max: max || 100})
-  return function (key, cb) { ac.get(key, cb) }
-}
+var u = require('./util')
 
 function startsWith(str, start) {
   for(var i = 0; i < start.length; i++)
@@ -17,33 +12,15 @@ function startsWith(str, start) {
   return true
 }
 
-function count (key, cb) {
-  return pull.reduce(function (acc, item) {
-    acc = acc || {}
-    var k = item[key]
-    if(k) acc[k] = 1 + (acc[k] || 0)
-    return acc
-  }, {}, function (err, acc) {
-    if(err) cb(err)
-    else cb(null, sort(acc))
-  })
-}
-
-function sort (obj) {
-  var _obj = {}
-  Object.keys(obj).sort(function (a, b) {
-    return obj[b] - obj[a]
-  }).forEach(function (k) {
-    _obj[k] = obj[k]
-  })
-  return _obj
-}
-
 exports.name = 'names'
 
+exports.version = '1.0.0'
+
 exports.manifest = {
-  signifier: 'async',
-  signified: 'async',
+  get: 'async',
+  getSignifier: 'async',
+  getSignifies: 'async',
+  dump: 'sync'
 }
 
 function extractLinks () {
@@ -71,85 +48,50 @@ function fixAbout () {
 
 }
 
+
 exports.init =
 function (sbot) {
+  var index = sbot._flumeUse('names', Reduce(2, function (g, rel) {
+    if(!g) g = {}
+
+    if(Array.isArray(rel))
+      rel.forEach(function (rel) {
+        G.addEdge(g, rel.from, rel.to, rel.value)
+      })
+    else
+      G.addEdge(g, rel.from, rel.to, rel.value)
+    return g
+  }, function (data) {
+    if(data.value.content.type === 'about' && data.value.content.name && isFeed(data.value.content.about)) {
+      return {from: data.value.author, to: data.value.content.about, value: data.value.content.name}
+    }
+    if(Array.isArray(data.value.content.mentions))
+      return data.value.content.mentions.filter(function (e) {
+        return !!e.name && isFeed(e.link)
+      }).map(function (e) {
+        return {from: data.value.author, to: e.link, value: e.name}
+      })
+  }))
+
+
   return {
-    signified: Cache(function (name, cb) {
-      pull(
-        many([
-          sbot.links({rel: 'mentions', dest: '@'}),
-          sbot.links({rel: 'about', dest: '@', values: true}),
-        ]),
-        //since we are doing such a broad query,
-        //we need to get the unique keys, otherwise messages
-        //with multiple links will be counted multiple times.
-        pull.unique('key'),
-        //retrive the message body...
-        //it would be better if this was stored in the link index though.
-        paramap(function (link, cb) {
-          sbot.get(link.key, function (err, msg) {
-            link.value = msg
-            cb(err, link)
-          })
-        }, 32),
-        fixAbout(),
-        extractLinks(),
-        pull.filter(function (link) {
-          return link.name && startsWith(link.name.toLowerCase(), name.toLowerCase())
-        }),
-
-        pull.reduce(function (acc, item) {
-          acc = acc || {}
-          var k = item.link + ':' + item.name
-          if(!acc[k])
-            acc[k] = {id: item.link, name: item.name, rank: 0}
-          acc[k].rank ++
-          return acc
-        }, {}, function (err, acc) {
-          if(err) cb(err)
-          else cb(null,
-            Object.keys(acc).map(function (k) {
-              return acc[k]
-            }).sort(function (a, b) {
-              return b.rank - a.rank
-            })
-          )
+    get: function (opts, cb) {
+      index.get(opts, cb)
+    },
+    getSignifier: function (id, cb) {
+      index.get({}, function (_, names) {
+        sbot.friends.get({}, function (_, friends) {
+          cb(null, u.nameFor(names, friends, sbot.id, id))
         })
-      )
-    }),
-    signifier: Cache(function (id, cb) {
-
-      pull(
-        sbot.links({dest: id, values: true}),
-        pull.filter(function (e) {
-          return /mentions|about/.test(e.rel)
-        }),
-        fixAbout(),
-        extractLinks(),
-        pull.filter(function (link) {
-          return link.link === id && link.name
-        }),
-        count('name', cb)
-      )
-
-    }, 10e3)
+      })
+    },
+    getSignifies: function (name, cb) {
+      index.get({}, function (_, names) {
+        sbot.friends.get({}, function (_, friends) {
+          cb(null, u.namedAs(names, friends, sbot.id, name))
+        })
+      })
+    }
   }
-}
-
-if(!module.parent) {
-  var query = process.argv[2]
-  if(!query) return console.error('must provide query')
-
-  require('ssb-client')(function (err, sbot) {
-    var start = Date.now()
-    var names = module.exports.init(sbot)
-    ;( isRef(query) ? names.signifier : names.signified )
-    (query, function (err, results) {
-      console.log(Date.now() - start)
-      console.log(results)
-      process.exit(1)
-    })
-  })
-
 }
 
