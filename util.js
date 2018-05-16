@@ -27,10 +27,11 @@ function nameFor(names, friends, source, dest) {
     })
 
     if(max) return max
-    return dest
+    //finally, fallback to their name for themselves
+    return names[dest][dest] || dest
   }
   else
-    return dest
+    return names[dest][dest] || dest
 
 }
 function namedAs(names, friends, source, prefix) {
