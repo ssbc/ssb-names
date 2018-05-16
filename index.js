@@ -8,12 +8,6 @@ var Reduce = require('flumeview-reduce')
 
 var u = require('./util')
 
-function startsWith(str, start) {
-  for(var i = 0; i < start.length; i++)
-    if(str[i] !== start[i]) return false
-  return true
-}
-
 function isObject (o) {
   return o && 'object' === typeof o
 }
@@ -31,31 +25,6 @@ exports.manifest = {
   dump: 'sync'
 }
 
-function extractLinks () {
-  return Through(function (msg) {
-    var q = this.queue
-    links(msg.value.content, function (link, rel) {
-      if(link.link[0] !== '@') return
-      q(link)
-    })
-  })
-}
-
-function fixAbout () {
-  //about links where a bad format where the data is beside the link
-  //instead of inside it.
-  return pull.map(function (e) {
-    if(e.value.content.type === 'about') {
-      var link = e.value.content
-      link.link = link.about
-      delete link.about
-      e.value.content = {about: link}
-    }
-    return e
-  })
-
-}
-
 function reduce (g, rel) {
   if(!g) g = {}
 
@@ -71,7 +40,6 @@ function reduce (g, rel) {
 
 exports.init =
 function (sbot) {
-  
   var index = sbot._flumeUse('names', Reduce(2, reduce, function (data) {
     var content = data.value.content
     var author = data.value.author
@@ -127,3 +95,4 @@ function (sbot) {
     }
   }
 }
+

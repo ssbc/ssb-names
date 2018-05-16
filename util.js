@@ -99,8 +99,3 @@ function namedAs(names, friends, source, prefix) {
 exports.nameFor = nameFor
 exports.namedAs = namedAs
 
-
-
-
-
-
