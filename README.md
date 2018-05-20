@@ -4,65 +4,62 @@ get the `signifier` (name for an object) or `signified` (object for a name) from
 
 ## Api
 
-### setup
+install as server side sbot plugin
 
-load as scuttlebot plugin or initialize client side.
+### names.get (cb)
 
-``` js
-var Names = require('ssb-names')
+get all naming relationships
 
-//load as sbot plugin.
-sbot.use(Names)
-var names = sbot.names
+### names.getImages
 
-//get the naming api as a client.
-var names = Names.init(sbot)
+get all image assigned relationships
+
+### names.getImageFor(id, cb)
+
+get the image for an id
+
+### names.getSignifier(id, cb)
+
+get the name for an id. returns a name for this id.
+
+### names.getSignifies(name, cb)
+
+get ids that have been named `name`.
+outputs an array:
+
 ```
-
-### names.signifier(id, cb)
-
-Get names assigned to a given feed, the result is a list of signifiers
-with numeric ranks.
-
-``` js
-names.signifier("@EMovhfIrFk4NihAKnRNhrfRaqIhBv1Wj8pTxJNgvCCY=.ed25519", cb)
-=>
-  { Dominic: 90,
-    Dominic_2: 11,
-    catbasher: 7,
-    Dominic2: 2,
-    Dominix: 1 }
-```
-
-### names.signified(name, cb)
-
-Get feeds with a given name. It's normal that more than one person has the same name.
-For example, many people are named "paul".
-Sometimes people loose their private keys and have to create a new account,
-which is the main reason there are two feeds named "dominic".
-
-To avoid confusing humans, names are not case sensitive.
-
-``` js
-names.signified('dominic', cb)
-=>
-  { '@EMovhfIrFk4NihAKnRNhrfRaqIhBv1Wj8pTxJNgvCCY=.ed25519': 90,
-    '@BIbVppzlrNiRJogxDYz3glUS7G4s4D4NiXiPEAEzxdE=.ed25519': 88,
-    '@J+0DGLgRn8H5tVLCcRUfN7NfUcTGEZKqML3krEOJjDY=.ed25519': 1 }
-```
+[{
+  name: name, //a full name matched from name
+  id: id, //the feed id
+  rank: i,
+  named: //what you would _normally_ call this feed.
+})
 
 ## Algorithm
 
-SUBJECT TO CHANGE.
+The algorithm iterates over all naming relationships,
+when looking up a name for someone, in these order:
 
-Currently, this module ranks names with a simple vote -
-each mention is a vote for that name, and everyone has equal votes.
-This mechanism will probably not be suitable in the long run,
-but will be sufficient to figure out what the api should be like.
+If you have selected a name for them, use your name.
+If your direct friends name them, use the most popular name.
+Else if friends of friends name them, use the most popular foaf name.
+
+If no one you know names them, use their self-declared name.
+
+friend's names for them have precidence over self-declared names
+because self-declared names are vulnerable to an attacker
+simply claiming the same name and avatar. With other-declared names,
+they'd need to convince your friends to rename them one by one.
 
 ## License
 
 MIT
+
+
+
+
+
+
 
 
 
