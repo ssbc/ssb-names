@@ -28,17 +28,21 @@ function nameFor(names, friends, source, dest) {
 
     if(max) return max
     //finally, fallback to their name for themselves
-
-    if (!names[dest])
-      return dest
-    else
-      return names[dest][dest] || dest
-
+    return getOwnNameFallBack(names, dest)
   }
   else
-    return names[dest][dest] || dest
+    return getOwnNameFallBack(names, dest)
 
 }
+
+/**
+ * Falls back to a user's name for themselves
+ */
+function getOwnNameFallBack(names, dest) {
+  if (!names[dest]) return dest
+  else return names[dest][dest] || dest
+}
+
 function namedAs(names, friends, source, prefix) {
   var named = {}
   function isPrefix(name) {
