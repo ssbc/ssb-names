@@ -10,6 +10,7 @@
   "dependencies": {
     "flumeview-reduce": "^1.0.2",
     "graphreduce": "^3.0.0",
+    "hashlru": "^2.2.1",
     "ssb-msgs": "^5.2.0",
     "ssb-ref": "^2.6.2"
   },
