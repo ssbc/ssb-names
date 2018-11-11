@@ -5,7 +5,7 @@ var isBlob = ref.isBlob
 var links = require('ssb-msgs').indexLinks
 var G = require('graphreduce')
 var Reduce = require('flumeview-reduce')
-
+var HashLRU = require('hashlru')
 var u = require('./util')
 
 function isObject (o) {
@@ -40,20 +40,25 @@ function reduce (g, rel) {
 
 exports.init =
 function (sbot) {
+  var cache = HashLRU(128)
   var index = sbot._flumeUse('names', Reduce(2, reduce, function (data) {
     var content = data.value.content
     var author = data.value.author
     if(content.type === 'about' && isFeed(content.about)) {
       var abouts = []
-      if(content.name)
+      if(content.name) {
+        cache.clear()
         return {from: author, to: content.about, value: content.name}
+      }
     }
-    if(Array.isArray(content.mentions))
+    if(Array.isArray(content.mentions)) {
+      cache.clear()
       return content.mentions.filter(function (e) {
         return !!e.name && isFeed(e.link)
       }).map(function (e) {
         return {from: author, to: e.link, value: e.name}
       })
+    }
   }))
 
   var images = sbot._flumeUse('images', Reduce(2, reduce, function (data) {
@@ -64,6 +69,23 @@ function (sbot) {
       return {from: author, to: content.about, value: image}
   }))
 
+  function cacheable(pre, async) {
+    return function (id, cb) {
+      var value = cache.get(pre+':'+id)
+
+      if(value) console.log('cache-hit:', pre+':'+id)
+      else console.log('cache-miss:', pre+':'+id)
+
+      if(value) cb(null, value)
+      else async(id, function (err, value) {
+        if(err) cb(err)
+        else {
+          cache.set(pre+':'+id, value)
+          cb(null, value)
+        }
+      })
+    }
+  }
 
   return {
     get: function (opts, cb) {
@@ -72,27 +94,32 @@ function (sbot) {
     getImages: function (opts, cb) {
       images.get(opts, cb)
     },
-    getImageFor: function (id, cb) {
+    getImageFor: cacheable('img',function (id, cb) {
       images.get({}, function (_, names) {
         sbot.friends.get({}, function (_, friends) {
           cb(null, u.nameFor(names, friends, sbot.id, id))
         })
       })
-    },
-    getSignifier: function (id, cb) {
+    }),
+    getSignifier: cacheable('sgr', function (id, cb) {
       index.get({}, function (_, names) {
         sbot.friends.get({}, function (_, friends) {
           cb(null, u.nameFor(names, friends, sbot.id, id))
         })
       })
-    },
-    getSignifies: function (name, cb) {
+    }),
+    getSignifies: cacheable('sge',function (name, cb) {
       index.get({}, function (_, names) {
         sbot.friends.get({}, function (_, friends) {
           cb(null, u.namedAs(names, friends, sbot.id, name))
         })
       })
-    }
+    })
   }
 }
+
+
+
+
+
 
